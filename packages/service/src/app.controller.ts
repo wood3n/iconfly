@@ -4,11 +4,14 @@ import {
   UseInterceptors,
   UploadedFile,
   Query,
+  Get,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { ensureDirSync, writeFileSync } from 'fs-extra';
-import { extname, resolve } from 'path';
+import { readFileSync, ensureDirSync, writeFileSync } from 'fs-extra';
+import { extname, resolve, join, basename } from 'path';
 import { optimize } from 'svgo';
+import SVGSpriter from 'svg-sprite';
+import glob from 'glob';
 import { ResponseDto } from './response.dto';
 import { AppService } from './app.service';
 
@@ -19,6 +22,54 @@ class FileUploadRes extends ResponseDto {
 @Controller()
 export class AppController {
   constructor(private readonly appService: AppService) {}
+
+  @Get('svg')
+  getSvgSprite() {
+    const spriter = new SVGSpriter({
+      dest: './icons',
+      mode: {
+        css: {
+          example: false,
+        },
+      },
+    });
+
+    glob(
+      '**/*.svg',
+      {
+        cwd: process.cwd(),
+      },
+      (err, files) => {
+        files.forEach((filename) => {
+          const filePath = join(process.cwd(), filename);
+          spriter.add(
+            filePath,
+            basename(filename),
+            readFileSync(filePath, 'utf8')
+          );
+        });
+
+        spriter.compile((error, result, data) => {
+          if (error) {
+            console.log(error);
+            return;
+          }
+
+          console.log(result);
+          try {
+            for (const type in result.css) {
+              writeFileSync(
+                join(process.cwd(), 'icons', basename(result.css[type].path)),
+                result.css[type].contents
+              );
+            }
+          } catch (err) {
+            console.log(err);
+          }
+        });
+      }
+    );
+  }
 
   @Post('upload')
   @UseInterceptors(FileInterceptor('file'))
@@ -55,6 +106,7 @@ export class AppController {
     const dirName = resolve(process.cwd(), 'icons');
     const filename = `${Date.now()}${extname(file.originalname)}`;
     ensureDirSync(dirName);
+    // @ts-expect-error result is OptimizedSvg
     writeFileSync(`${dirName}/${filename}`, result.data, 'utf8');
 
     // 保存 url 到数据库
