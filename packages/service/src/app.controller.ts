@@ -3,6 +3,7 @@ import {
   Post,
   UseInterceptors,
   UploadedFile,
+  Query,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ensureDirSync, writeFileSync } from 'fs-extra';
@@ -21,7 +22,10 @@ export class AppController {
 
   @Post('upload')
   @UseInterceptors(FileInterceptor('file'))
-  upload(@UploadedFile() file: Express.Multer.File): FileUploadRes {
+  upload(
+    @UploadedFile() file: Express.Multer.File,
+    @Query('cleanColor') cleanColor: boolean
+  ): FileUploadRes {
     // 基于 svgo 优化 svg
     const result = optimize(file.buffer.toString(), {
       // optional but recommended field
@@ -29,25 +33,20 @@ export class AppController {
       // all config fields are also available here
       multipass: true,
       plugins: [
-        // set of built-in plugins enabled by default
         'preset-default',
-
-        // enable built-in plugins by name
-        'prefixIds',
-
-        // or by expanded notation which allows to configure plugin
         {
-          name: 'sortAttrs',
+          // 选择是否移除 svg 元素的颜色属性：https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/color
+          name: 'removeAttrs',
           params: {
-            overrides: {
-              // customize default plugin options
-              inlineStyles: {
-                onlyMatchedOnce: false,
-              },
-
-              // or disable plugins
-              removeDoctype: true,
-            },
+            attrs: cleanColor
+              ? [
+                  'fill',
+                  'stroke',
+                  'stop-color',
+                  'flood-color',
+                  'lighting-color',
+                ]
+              : '',
           },
         },
       ],
